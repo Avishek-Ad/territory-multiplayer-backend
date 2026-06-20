@@ -43,7 +43,8 @@ INSTALLED_APPS = [
     'rest_framework',
     
     # internals
-    'users'
+    'users',
+    'game'
 ]
 
 MIDDLEWARE = [
