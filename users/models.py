@@ -44,7 +44,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.name
     
-class Profile(models.Model):
+class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
     # avatar
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
@@ -57,7 +57,7 @@ class Profile(models.Model):
     wins = models.PositiveIntegerField(default=0)
     
     def __str__(self):
-        return self.user
+        return f"{self.user}"
     
 def get_refresh_token_expiry():
     return timezone.now() + timedelta(weeks=1)
