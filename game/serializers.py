@@ -22,6 +22,7 @@ class RoomMemberInlineSerializer(serializers.ModelSerializer):
 
 class RoomSerializer(serializers.ModelSerializer):
     room_members = RoomMemberInlineSerializer(source="members", read_only=True, many=True)
+    room_code = serializers.SerializerMethodField(read_only=True)
     class Meta:
         model = Room
         fields = [
@@ -33,6 +34,9 @@ class RoomSerializer(serializers.ModelSerializer):
             'status',
             'created_at'
         ]
+    
+    def get_room_code(self, obj):
+        return obj.room_code
         
 class RoomUpdateSerializer(serializers.ModelSerializer):
     class Meta:

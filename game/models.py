@@ -1,3 +1,4 @@
+import helpers
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator
@@ -25,6 +26,11 @@ class Room(models.Model):
     
     def __str__(self):
         return f"{self.name} - {self.room_code}"
+    
+    def save(self, *args, **kwargs):
+        if self.room_code == "" or self.room_code is None:
+            self.room_code = helpers.generate_room_code(self)
+        return super().save(*args, **kwargs)
     
 class RoomMember(models.Model):
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="members")
