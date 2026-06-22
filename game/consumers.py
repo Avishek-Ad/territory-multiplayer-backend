@@ -14,6 +14,7 @@ import random
 rooms = {}
 room_width = 200
 room_height = 200
+minimum_players_required = 2
 
 @database_sync_to_async
 def is_user_host(room, user):
@@ -32,8 +33,12 @@ def get_initial_player_dict():
         'x': random.randint(0, room_width),
         'y': random.randint(0, room_height),
         'direction': random.choice(list(Direction)),
-        'alive': True
+        'alive': True,
+        'ready': True
     }
+
+def are_all_players_in_room_ready(room_code):
+    pass
 
 class GameConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -65,7 +70,6 @@ class GameConsumer(AsyncWebsocketConsumer):
                     f'user-{self.user.id}': [(player["x"], player['y'])]
                 },
                 'territory_grid': [0 for _ in room_height for _ in room_width],
-                # need to mark the start of the player as their territory
                 'timer': 5*60
             }
             
@@ -104,7 +108,6 @@ class GameConsumer(AsyncWebsocketConsumer):
             player = get_initial_player_dict()
             rooms[self.room_code]["players"][f'user-{self.user.id}'] = player
             rooms[self.room_code]["trails"][f'user-{self.user.id}'].append((player['x'], player['y']))
-            # also add the current position as their territory
             await self.channel_layer.group_send(
                 self.game_room_name,
                 {
@@ -135,12 +138,37 @@ class GameConsumer(AsyncWebsocketConsumer):
         
         elif data['type'] == "READY": # will do later
             # only by non host
-            pass
+            # add a ready field in the players dictionary
+            rooms[self.room_code]["players"][f'user-{self.user.id}']['ready'] = True
+            
         elif data['type'] == "UNREADY": # will do later
             # only by non host
-            pass
+            # add a ready field in the players dictionary
+            rooms[self.room_code]["players"][f'user-{self.user.id}']['ready'] = False
+            
         elif data['type'] == "START_GAME":
             # only by host
+            if not is_user_host(self.room, self.user):
+                await self.send(
+                    text_data=json.dumps(
+                        {
+                            "type": "ERROR", 
+                            'message': "You are not in the room"
+                        }
+                    )
+                )
+            # are minimum number of players there
+            current_player_count = len(rooms[self.room_code]["players"])
+            if current_player_count < minimum_players_required:
+                await self.send(
+                    text_data=json.dumps(
+                        {
+                            "type": "ERROR",
+                            'message': f'At minimum {minimum_players_required} players are required to start the game'
+                        }
+                    )
+                )
+            # are all available players ready
             pass
         elif data['type'] == "CHANGE_DIRECTION":
             pass
