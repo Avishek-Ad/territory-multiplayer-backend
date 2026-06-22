@@ -5,6 +5,7 @@ from .models import Room, RoomMember
 import json
 from .room_objects import User, Room, Direction
 import random
+import asyncio
 
 # TODO: add indication for online users
 # currently only for authenticated users
@@ -15,6 +16,7 @@ rooms = {}
 room_width = 200
 room_height = 200
 minimum_players_required = 2
+speed = 1
 
 @database_sync_to_async
 def is_user_host(room, user):
@@ -37,8 +39,11 @@ def get_initial_player_dict():
         'ready': True
     }
 
-def are_all_players_in_room_ready(room_code):
-    pass
+def are_all_players_in_room_ready(players:dict):
+    for player in players.values():
+        if not player['ready']:
+            return False
+    return True
 
 class GameConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -169,7 +174,17 @@ class GameConsumer(AsyncWebsocketConsumer):
                     )
                 )
             # are all available players ready
-            pass
+            if not are_all_players_in_room_ready(rooms[self.room_code]['players']):
+                await self.send(
+                    text_data=json.dumps(
+                        {
+                            "type": "ERROR",
+                            'message': 'Not all players are ready'
+                        }
+                    )
+                )
+            # send a game start broadcast
+            # start the game loop
         elif data['type'] == "CHANGE_DIRECTION":
             pass
         
@@ -181,9 +196,59 @@ class GameConsumer(AsyncWebsocketConsumer):
         GAME_FINISHED
         """
         
-        
-    
-    
     async def status_message(self, event):
         message = event['message']
         await self.send(text_data=json.dumps({ "type": "INFO", 'message': message}))
+    
+    
+    async def start_game_loop(self):
+        try:
+            while rooms[self.room_code]['timer'] > 0:
+                # update position
+                # check collision
+                # update territory
+                # broadcast GAME_STATE
+                pass
+        except asyncio.CancelledError:
+            pass
+        
+    async def update_position(self):
+        for player in rooms[self.room_code]['players'].values():
+            if player['direction'] == Direction.UP:
+                player['y'] -= speed
+                if player['y'] < 0:
+                    player['y'] = 0
+            elif player['direction'] == Direction.DOWN:
+                player['y'] += speed
+                if player['y'] > room_height:
+                    player['y'] = room_height
+            elif player['direction'] == Direction.LEFT:
+                player['x'] -= speed
+                if player['x'] < 0:
+                    player['x'] = 0
+            elif player['direction'] == Direction.RIGHT:
+                if player['x'] > room_width:
+                    player['x'] = room_width
+            
+        # if current position is not in personal territory add it to the trail
+        for id, values in rooms[self.room_code]['trails'].items():
+            x = rooms[self.room_code]['players'][id]['x']
+            y = rooms[self.room_code]['players'][id]['y']
+            user_id = int(id.split('-')[1])
+            if rooms[self.room_code]['territory_grid'][x][y] != user_id:
+                # what if someone else's territory turn to neutral
+                rooms[self.room_code]['territory_grid'][x][y] = 0
+                # what if someone else's trail -- will be checked bellow in check-collision
+                # add this position to trail
+                # what if current position is already in the trail
+                if (x, y) not in values:
+                    rooms[self.room_code]['trails'][id].append((x,y))
+                    
+    
+    async def check_collision(self):
+        # if previous position was a trail and current is in self territory include the inclusure in territory
+        # checking trial collision with other player position
+        pass
+    
+    async def update_territory(self):
+        pass
