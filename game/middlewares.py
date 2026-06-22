@@ -30,8 +30,12 @@ class TokenAuthMiddleware:
             # validating jwt token
             try:
                 payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-                user = await get_user_from_payload(payload)
-                scope['user'] = user
+                # only accepting valid access token
+                if payload.get('token_type') != 'access':
+                    scope['user'] = AnonymousUser()
+                else:
+                    user = await get_user_from_payload(payload)
+                    scope['user'] = user
             except Exception as e:
                 print(f"JWT Authentication Failed: {e}")
                 scope['user'] = AnonymousUser()

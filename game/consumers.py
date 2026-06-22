@@ -1,6 +1,6 @@
-from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.generic.websocket import WebsocketConsumer
 
-class GameConsumer(AsyncWebsocketConsumer):
+class GameConsumer(WebsocketConsumer):
     def connect(self):
         print(self.scope['user'])
         return super().connect()
