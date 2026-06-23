@@ -60,7 +60,12 @@ class Match(models.Model):
         null=True,
         blank=True
         )
-    map_size = models.DecimalField(max_digits=10, decimal_places=2) # will be a radius
+    map_width = models.PositiveIntegerField(default=100)
+    map_height = models.PositiveIntegerField(default=100)
+    
+    @property
+    def map_size(self):
+        return self.map_width, self.map_height
     
 class MatchResult(models.Model):
     match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name="results")

@@ -15,6 +15,13 @@ def is_user_in_room(room, user):
 def remove_user_from_room(room, user):
     RoomMember.objects.get(room=room, user=user).delete()
     
+def alive_player_count(players: list) -> int:
+    alive = 0
+    for player in players:
+        if player['alive']:
+            alive += 1
+    return alive
+    
 def get_initial_player_dict(name, width, height):
     return {
         'name': name,

@@ -158,7 +158,8 @@ class GameConsumer(AsyncWebsocketConsumer):
                         }
                     )
                 )
-            # TODO send a game start broadcast
+            # TODO create the match record in the database
+            # send a game start broadcast
             await self.channel_layer.group_send(
                 self.game_room_name, 
                 {
@@ -166,7 +167,8 @@ class GameConsumer(AsyncWebsocketConsumer):
                     'room_code': self.room_code
                 }
             )
-            # TODO start the game loop
+            # start the game loop
+            self.loop_task = asyncio.create_task(self.start_game_loop())
         elif data['type'] == "CHANGE_DIRECTION":
             pass
         
@@ -185,8 +187,15 @@ class GameConsumer(AsyncWebsocketConsumer):
     async def game_start_broadcast(self, event):
         room_code = event['room_code']
         await self.send(text_data=json.dumps({
-            "type": "GAME_START",
+            "type": "GAME_STARTED",
             "room": rooms[room_code]
+        }))
+        
+    async def game_finish_broadcast(self, event):
+        winner = event['winner']
+        await self.send(text_data=json.dumps({
+            "type": "GAME_FINISHED",
+            "winner": winner
         }))
         
     async def game_state_broadcast(self, event):
@@ -195,10 +204,18 @@ class GameConsumer(AsyncWebsocketConsumer):
             "type": "GAME_STATE",
             "room": rooms[room_code]
         }))
+        
+    async def player_death_broadcast(self, event):
+        player_killed = event['player_killed']
+        player_by = event['player_by']
+        await self.send(text_data=json.dumps({
+            "type": "PLAYER_ELIMINATED",
+            "message": f'{player_killed} was killed by {player_by}'
+        }))
     
     
     async def start_game_loop(self):
-        try:
+        try:                    
             while rooms[self.room_code]['timer'] > 0:
                 # update position
                 await self.update_position()
@@ -206,18 +223,22 @@ class GameConsumer(AsyncWebsocketConsumer):
                 await self.check_collision()
                 # update territory
                 await self.update_territory()
-                # TODO broadcast GAME_STATE
+                # broadcast GAME_STATE
                 await self.channel_layer.group_send(
-                self.game_room_name, 
-                {
-                    'type': "game.start.broadcast",
-                    'room_code': self.room_code
-                }
-            )
+                    self.game_room_name, 
+                    {
+                        'type': "game.start.broadcast",
+                        'room_code': self.room_code
+                    }
+                )
                 # reduce timer
                 rooms[self.room_code]['timer'] -= 1
                 
                 await asyncio.sleep(0.3) # 300ms -> 1sec = 1000ms
+            else:
+                # if timer is zero send a game finished broadcast and stop game loop
+                await self.stop_gameloop_and_send_game_finish_broadcast()
+                
         except asyncio.CancelledError:
             pass
         
@@ -264,6 +285,23 @@ class GameConsumer(AsyncWebsocketConsumer):
                 if id_p != id_tp and (x, y) in values:
                     # kill id_tp player as its trail was cut
                     rooms[self.room_code]['players'][id_tp]['alive'] = False
+                    # send a player has died broadcast
+                    await self.channel_layer.group_send(
+                        self.game_room_name, 
+                        {
+                            'type': "player.death.broadcast",
+                            'room_code': self.room_code
+                        }
+                    )
+                    # if only one player alive send a game finished broadcast and stop the game loop
+                    if gm_h.alive_player_count(rooms[self.room_code]['players'].values()) <= 1:
+                        # TODO stop the game loop and finish the match and save match records and declare winner as none
+                        await self.stop_gameloop_and_send_game_finish_broadcast() # winner will be calculated inside
+                        # pass
+                    # elif gm_h.alive_player_count(rooms[self.room_code]['players'].values()) == 1:
+                        # stop the game loop and finish the match and save match records and declare winner as the one alive
+                        # await self.stop_gameloop_and_send_game_finish_broadcast() # winner will be calculated inside
+                        # pass
     
     async def update_territory(self):
         # if previous position was a trail and current is in self territory include the inclusure in territory
@@ -276,3 +314,19 @@ class GameConsumer(AsyncWebsocketConsumer):
             if (x_prev, y_prev) in rooms[self.room_code]['trails'][id] and rooms[self.room_code]['territory_grid'][x][y] == user_id:
                 # TODO put all coordinate inside the enclosure in the territory as user_id
                 pass
+            
+    async def stop_gameloop_and_send_game_finish_broadcast(self):
+        if hasattr(self, 'loop_task'):
+            self.loop_task.cancel()
+            
+        # TODO update the database and calculate the winner -> save match records and finish the match
+        winner = None
+                    
+        await self.channel_layer.group_send(
+            self.game_room_name, 
+            {
+                'type': "game.finish.broadcast",
+                'room_code': self.room_code,
+                'winner': winner
+            }
+        )
