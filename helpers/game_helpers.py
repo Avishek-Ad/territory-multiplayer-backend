@@ -1,6 +1,6 @@
 import random
 from channels.db import database_sync_to_async
-from game.models import RoomMember, Match
+from game.models import RoomMember, Match, MatchResult, Room, MatchStatus
 from game.room_objects import Direction
 from django.contrib.auth import get_user_model
 
@@ -32,7 +32,11 @@ def create_match_record(room, width, height):
     
 @database_sync_to_async
 def finish_match_and_save_match_records(room_code, room):
-    pass
+    room_obj = Room.objects.get(room_code=room_code)
+    match = room_obj.matches.first()
+    match.status = MatchStatus.FINISHED
+    for player in room["players"].values():
+        pass
     
 def alive_player_count(players: list) -> int:
     alive = 0

@@ -10,6 +10,11 @@ class RoomStatus(models.TextChoices):
     STARTING = "starting", "Starting"
     IN_PROGRESS = "in_progress", "In Progress"
     FINISHED = "finished", "Finished"
+    
+class MatchStatus(models.TextChoices):
+    STARTING = "starting", "Starting"
+    IN_PROGRESS = "in_progress", "In Progress"
+    FINISHED = "finished", "Finished"
 
 class Room(models.Model):
     room_code = models.CharField(max_length=100, unique=True)
@@ -62,6 +67,10 @@ class Match(models.Model):
         )
     map_width = models.PositiveIntegerField(default=100)
     map_height = models.PositiveIntegerField(default=100)
+    status = models.CharField(max_length=15, choices=MatchStatus.choices, default=MatchStatus.STARTING)
+    
+    class Meta:
+        ordering = ['started_at']
     
     @property
     def map_size(self):
