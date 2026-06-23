@@ -74,6 +74,28 @@ def get_player_previous_coordinate(x, y, dir, speed):
     return x, y
 
 def flood_filed_territory_capture(territory_grid, player_id, trails):
-    for row in territory_grid:
-        for col in row:
-            pass
+    rows = len(territory_grid)
+    cols = len(territory_grid[0])
+    to_visit = [(0,0)]
+    visited = [[False for _ in range(cols)] for _ in range(rows)]
+    
+    while to_visit:
+        r, c = to_visit.pop()
+        neighbors = [(r-1, c), (r+1, c), (r, c-1), (r, c+1)]
+        
+        for nr, nc in neighbors:
+            if nr<0 or nr>=rows or nc<0 or nc>=cols:
+                continue
+            if visited[nr][nc]:
+                continue
+            if territory_grid[nr][nc] == player_id or (nr, nc) in trails: # wall
+                continue
+            
+            visited[nr][nc] = True
+            to_visit.append((nr, nc))
+        
+    for r in range(rows):
+        for c in range(cols):
+            if not visited[r][c]:
+                territory_grid[r][c] = player_id
+    return territory_grid

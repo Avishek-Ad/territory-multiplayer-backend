@@ -283,8 +283,11 @@ class GameConsumer(AsyncWebsocketConsumer):
                 if (x, y) not in values:
                     rooms[self.room_code]['trails'][id].append((x,y))
                 else:
-                    # TODO what if current position is already in the trail -> put enclosure in self territory
-                    pass
+                    # what if current position is already in the trail -> put enclosure in self territory
+                    trails = rooms[self.room_code]['trails'][id]
+                    gm_h.flood_filed_territory_capture(rooms[self.room_code]['territory_grid'], user_id, trails)
+                    # clearing the trails
+                    rooms[self.room_code]['trails'][id] = 0
                     
     
     async def check_collision(self):
@@ -331,8 +334,11 @@ class GameConsumer(AsyncWebsocketConsumer):
             user_id = int(id.split('-')[1])
             # if prev was a trail and current is in self territory
             if (x_prev, y_prev) in rooms[self.room_code]['trails'][id] and rooms[self.room_code]['territory_grid'][x][y] == user_id:
-                # TODO put all coordinate inside the enclosure in the territory as user_id
-                pass
+                # put all coordinate inside the enclosure in the territory as user_id
+                trails = rooms[self.room_code]['trails'][id]
+                gm_h.flood_filed_territory_capture(rooms[self.room_code]['territory_grid'], user_id, trails)
+                # now remove the trails
+                rooms[self.room_code]['trails'][id] = []
             
     async def stop_gameloop_and_send_game_finish_broadcast(self):
         if hasattr(self, 'loop_task'):
@@ -363,8 +369,8 @@ class GameConsumer(AsyncWebsocketConsumer):
         rooms[self.room_code]['players'][player_id]['x'] = new_x
         rooms[self.room_code]['players'][player_id]['y'] = new_y
         rooms[self.room_code]['trails'][player_id] = [(new_x, new_y)]
-        for row in rooms[self.room_code]['territory_grid']:
-            for col in row:
+        for row in range(len(rooms[self.room_code]['territory_grid'])):
+            for col in range(len(rooms[self.room_code]['territory_grid'][0])):
                 if rooms[self.room_code]['territory_grid'][row][col] == player_id:
                     rooms[self.room_code]['territory_grid'][row][col] == 0
         
