@@ -3,14 +3,14 @@ from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from .models import Room, RoomMember
 import json
-from .room_objects import User, Room, Direction
-import random
+from .room_objects import Direction
 import asyncio
+import helpers.game_helpers as gm_h
 
-# TODO: add indication for online users
+# : add indication for online users
 # currently only for authenticated users
-# TODO: make a play anomonoyusly system as well
-# TODO: also make no room_code one for local users
+# : make a play anomonoyusly system as well
+# : also make no room_code one for local users
 
 rooms = {}
 room_width = 200
@@ -18,32 +18,7 @@ room_height = 200
 minimum_players_required = 2
 speed = 1
 
-@database_sync_to_async
-def is_user_host(room, user):
-    return RoomMember.objects.filter(room=room, user=user, is_host=True).exists()
 
-@database_sync_to_async
-def is_user_in_room(room, user):
-    return RoomMember.objects.filter(room=room, user=user).exists()
-
-@database_sync_to_async
-def remove_user_from_room(room, user):
-    RoomMember.objects.get(room=room, user=user).delete()
-    
-def get_initial_player_dict():
-    return {
-        'x': random.randint(0, room_width),
-        'y': random.randint(0, room_height),
-        'direction': random.choice(list(Direction)),
-        'alive': True,
-        'ready': True
-    }
-
-def are_all_players_in_room_ready(players:dict):
-    for player in players.values():
-        if not player['ready']:
-            return False
-    return True
 
 class GameConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -64,8 +39,8 @@ class GameConsumer(AsyncWebsocketConsumer):
         )
         await self.accept()
         
-        if is_user_host(self.room, self.user) and not rooms[self.room_code]:
-            player = get_initial_player_dict()
+        if gm_h.is_user_host(self.room, self.user) and not rooms[self.room_code]:
+            player = gm_h.get_initial_player_dict(name=self.user.name, width=room_width, height=room_height)
             # create the room object
             room = {
                 "players": {
@@ -110,7 +85,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                 user=self.user
             ))
             self.context['membership'] = room_member
-            player = get_initial_player_dict()
+            player = gm_h.get_initial_player_dict(name=self.user.name, width=room_width, height=room_height)
             rooms[self.room_code]["players"][f'user-{self.user.id}'] = player
             rooms[self.room_code]["trails"][f'user-{self.user.id}'].append((player['x'], player['y']))
             await self.channel_layer.group_send(
@@ -122,7 +97,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             )
         
         elif data['type'] == "LEAVE_ROOM":
-            if not is_user_in_room(self.room, self.user):
+            if not gm_h.is_user_in_room(self.room, self.user):
                 await self.send(
                     text_data=json.dumps(
                         {
@@ -132,7 +107,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                     )
                 )
             rooms[self.room_code]["players"][f'user-{self.user.id}']['alive'] = False
-            remove_user_from_room(self.room, self.user)
+            gm_h.remove_user_from_room(self.room, self.user)
             await self.channel_layer.group_send(
                 self.game_room_name,
                 {
@@ -153,7 +128,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             
         elif data['type'] == "START_GAME":
             # only by host
-            if not is_user_host(self.room, self.user):
+            if not gm_h.is_user_host(self.room, self.user):
                 await self.send(
                     text_data=json.dumps(
                         {
@@ -174,7 +149,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                     )
                 )
             # are all available players ready
-            if not are_all_players_in_room_ready(rooms[self.room_code]['players']):
+            if not gm_h.are_all_players_in_room_ready(rooms[self.room_code]['players']):
                 await self.send(
                     text_data=json.dumps(
                         {
@@ -183,8 +158,15 @@ class GameConsumer(AsyncWebsocketConsumer):
                         }
                     )
                 )
-            # send a game start broadcast
-            # start the game loop
+            # TODO send a game start broadcast
+            await self.channel_layer.group_send(
+                self.game_room_name, 
+                {
+                    'type': "game.start.broadcast",
+                    'room_code': self.room_code
+                }
+            )
+            # TODO start the game loop
         elif data['type'] == "CHANGE_DIRECTION":
             pass
         
@@ -200,15 +182,42 @@ class GameConsumer(AsyncWebsocketConsumer):
         message = event['message']
         await self.send(text_data=json.dumps({ "type": "INFO", 'message': message}))
     
+    async def game_start_broadcast(self, event):
+        room_code = event['room_code']
+        await self.send(text_data=json.dumps({
+            "type": "GAME_START",
+            "room": rooms[room_code]
+        }))
+        
+    async def game_state_broadcast(self, event):
+        room_code = event['room_code']
+        await self.send(text_data=json.dumps({
+            "type": "GAME_STATE",
+            "room": rooms[room_code]
+        }))
+    
     
     async def start_game_loop(self):
         try:
             while rooms[self.room_code]['timer'] > 0:
                 # update position
+                await self.update_position()
                 # check collision
+                await self.check_collision()
                 # update territory
-                # broadcast GAME_STATE
-                pass
+                await self.update_territory()
+                # TODO broadcast GAME_STATE
+                await self.channel_layer.group_send(
+                self.game_room_name, 
+                {
+                    'type': "game.start.broadcast",
+                    'room_code': self.room_code
+                }
+            )
+                # reduce timer
+                rooms[self.room_code]['timer'] -= 1
+                
+                await asyncio.sleep(0.3) # 300ms -> 1sec = 1000ms
         except asyncio.CancelledError:
             pass
         
@@ -227,6 +236,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                 if player['x'] < 0:
                     player['x'] = 0
             elif player['direction'] == Direction.RIGHT:
+                player['x'] += speed
                 if player['x'] > room_width:
                     player['x'] = room_width
             
@@ -246,9 +256,23 @@ class GameConsumer(AsyncWebsocketConsumer):
                     
     
     async def check_collision(self):
-        # if previous position was a trail and current is in self territory include the inclusure in territory
         # checking trial collision with other player position
-        pass
+        for id_p, player in rooms[self.room_code]['players'].items():
+            x = player['x']
+            y = player['y']
+            for id_tp, values in rooms[self.room_code]['trails'].items():
+                if id_p != id_tp and (x, y) in values:
+                    # kill id_tp player as its trail was cut
+                    rooms[self.room_code]['players'][id_tp]['alive'] = False
     
     async def update_territory(self):
-        pass
+        # if previous position was a trail and current is in self territory include the inclusure in territory
+        for id, player in rooms[self.room_code]['players'].items():
+            x = player['x']
+            y = player['y']
+            x_prev, y_prev = gm_h.get_player_previous_coordinate(x, y, player['direction'], speed)
+            user_id = int(id.split('-')[1])
+            # if prev was a trail and current is in self territory
+            if (x_prev, y_prev) in rooms[self.room_code]['trails'][id] and rooms[self.room_code]['territory_grid'][x][y] == user_id:
+                # TODO put all coordinate inside the enclosure in the territory as user_id
+                pass
