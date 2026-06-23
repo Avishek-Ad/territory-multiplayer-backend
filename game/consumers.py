@@ -158,7 +158,8 @@ class GameConsumer(AsyncWebsocketConsumer):
                         }
                     )
                 )
-            # TODO create the match record in the database
+            # create the match record in the database
+            gm_h.create_match_record(self.room, room_width, room_height)
             # send a game start broadcast
             await self.channel_layer.group_send(
                 self.game_room_name, 
@@ -208,9 +209,11 @@ class GameConsumer(AsyncWebsocketConsumer):
     async def player_death_broadcast(self, event):
         player_killed = event['player_killed']
         player_by = event['player_by']
+        killed_player_id = event['killed_player_id']
         await self.send(text_data=json.dumps({
             "type": "PLAYER_ELIMINATED",
-            "message": f'{player_killed} was killed by {player_by}'
+            "message": f'{player_killed} was killed by {player_by}',
+            "killed_player": f'user-{killed_player_id}'
         }))
     
     
@@ -244,6 +247,9 @@ class GameConsumer(AsyncWebsocketConsumer):
         
     async def update_position(self):
         for player in rooms[self.room_code]['players'].values():
+        # if player is not alive donot update the position
+            if not player['alive']:
+                continue
             if player['direction'] == Direction.UP:
                 player['y'] -= speed
                 if player['y'] < 0:
@@ -263,6 +269,9 @@ class GameConsumer(AsyncWebsocketConsumer):
             
         # if current position is not in personal territory add it to the trail
         for id, values in rooms[self.room_code]['trails'].items():
+            # if player is not alive donot try to create trails
+            if not rooms[self.room_code]['players'][id]['alive']:
+                continue
             x = rooms[self.room_code]['players'][id]['x']
             y = rooms[self.room_code]['players'][id]['y']
             user_id = int(id.split('-')[1])
@@ -271,9 +280,11 @@ class GameConsumer(AsyncWebsocketConsumer):
                 rooms[self.room_code]['territory_grid'][x][y] = 0
                 # what if someone else's trail -- will be checked bellow in check-collision
                 # add this position to trail
-                # what if current position is already in the trail
                 if (x, y) not in values:
                     rooms[self.room_code]['trails'][id].append((x,y))
+                else:
+                    # TODO what if current position is already in the trail -> put enclosure in self territory
+                    pass
                     
     
     async def check_collision(self):
@@ -284,13 +295,21 @@ class GameConsumer(AsyncWebsocketConsumer):
             for id_tp, values in rooms[self.room_code]['trails'].items():
                 if id_p != id_tp and (x, y) in values:
                     # kill id_tp player as its trail was cut
-                    rooms[self.room_code]['players'][id_tp]['alive'] = False
-                    # send a player has died broadcast
+                    rooms[self.room_code]['players'][id_tp]['alive'] = False 
+                    rooms[self.room_code]['players'][id_tp]['deaths'] += 1
+                    rooms[self.room_code]['players'][id_p]['kills'] += 1
+                    # send a player has died broadcast -> after this self will show Responing in few second
+                    player_killed = gm_h.get_player_name_by_id(int(id_tp.split('-')[1]))
+                    player_by = gm_h.get_player_name_by_id(int(id_p.split('-')[1]))
+                    # will respone the player after few second in random position
+                    asyncio.create_task(self.handle_respwan(dely_seconds=3), player_id=player_killed)
                     await self.channel_layer.group_send(
                         self.game_room_name, 
                         {
                             'type': "player.death.broadcast",
-                            'room_code': self.room_code
+                            'player_killed': player_killed,
+                            'player_by': player_by,
+                            'killed_player_id': int(id_tp.split('-')[1])
                         }
                     )
                     # if only one player alive send a game finished broadcast and stop the game loop
@@ -330,3 +349,27 @@ class GameConsumer(AsyncWebsocketConsumer):
                 'winner': winner
             }
         )
+        
+    async def handle_respwan(self, delay_seconds: int, player_id:int):
+        # send a self.send with will respone in delay_seconds
+        await self.send(text_data=json.dumps({
+            "type": "WILL_RESPAWN",
+            "message": f'Respawn in {delay_seconds}',
+        }))
+        
+        # randomize the position and reset the trails and territory
+        new_x, new_y = gm_h.get_random_coordinate(room_width, room_height)
+        
+        rooms[self.room_code]['players'][player_id]['x'] = new_x
+        rooms[self.room_code]['players'][player_id]['y'] = new_y
+        rooms[self.room_code]['trails'][player_id] = [(new_x, new_y)]
+        for row in rooms[self.room_code]['territory_grid']:
+            for col in row:
+                if rooms[self.room_code]['territory_grid'][row][col] == player_id:
+                    rooms[self.room_code]['territory_grid'][row][col] == 0
+        
+        # wait for few seconds
+        await asyncio.sleep(delay_seconds)
+        
+        # make the player alive
+        rooms[self.room_code]['players'][player_id]['alive'] = True

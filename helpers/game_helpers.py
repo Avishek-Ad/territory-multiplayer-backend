@@ -1,7 +1,14 @@
 import random
 from channels.db import database_sync_to_async
-from game.models import RoomMember
+from game.models import RoomMember, Match
 from game.room_objects import Direction
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+@database_sync_to_async
+def get_player_name_by_id(player_id):
+    return User.objects.get(id=player_id).name or ""
 
 @database_sync_to_async
 def is_user_host(room, user):
@@ -14,6 +21,18 @@ def is_user_in_room(room, user):
 @database_sync_to_async
 def remove_user_from_room(room, user):
     RoomMember.objects.get(room=room, user=user).delete()
+    
+@database_sync_to_async
+def create_match_record(room, width, height):
+    Match.objects.create(
+        room=room,
+        map_width=width,
+        map_height=height
+    )
+    
+@database_sync_to_async
+def finish_match_and_save_match_records(room_code, room):
+    pass
     
 def alive_player_count(players: list) -> int:
     alive = 0
@@ -29,8 +48,13 @@ def get_initial_player_dict(name, width, height):
         'y': random.randint(0, height),
         'direction': random.choice(list(Direction)),
         'alive': True,
-        'ready': True
+        'ready': True,
+        'kills': 0,
+        'deaths': 0
     }
+    
+def get_random_coordinate(width, height):
+    return random.randint(0, width), random.randint(0, height)
 
 def are_all_players_in_room_ready(players:dict):
     for player in players.values():
@@ -48,3 +72,8 @@ def get_player_previous_coordinate(x, y, dir, speed):
     elif dir == Direction.RIGHT:
         x += speed
     return x, y
+
+def flood_filed_territory_capture(territory_grid, player_id, trails):
+    for row in territory_grid:
+        for col in row:
+            pass
