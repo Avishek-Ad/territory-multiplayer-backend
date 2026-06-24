@@ -23,6 +23,13 @@ def remove_user_from_room(room, user):
     RoomMember.objects.get(room=room, user=user).delete()
     
 @database_sync_to_async
+def create_room_member(room, user):
+    return RoomMember.objects.get_or_create(
+        room=room,
+        user=user
+    )
+    
+@database_sync_to_async
 def create_match_record(room, width, height):
     Match.objects.create(
         room=room,

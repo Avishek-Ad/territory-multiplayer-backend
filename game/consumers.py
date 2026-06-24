@@ -1,7 +1,7 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
-from .models import Room, RoomMember
+from .models import Room
 import json
 from .room_objects import Direction
 import asyncio
@@ -80,10 +80,7 @@ class GameConsumer(AsyncWebsocketConsumer):
         data = json.load(text_data)
         
         if data['type'] == "JOIN_ROOM":
-            room_member = database_sync_to_async(RoomMember.objects.get_or_create(
-                room=self.room,
-                user=self.user
-            ))
+            room_member = gm_h.create_room_member(self.room, self.user)
             self.context['membership'] = room_member
             player = gm_h.get_initial_player_dict(name=self.user.name, width=room_width, height=room_height)
             rooms[self.room_code]["players"][f'user-{self.user.id}'] = player
