@@ -58,19 +58,17 @@ class Match(models.Model):
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="matches")
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
-    winner = models.ForeignKey(
-        User, 
-        on_delete=models.SET_NULL, 
-        related_name="won_matches",
-        null=True,
-        blank=True
-        )
     map_width = models.PositiveIntegerField(default=100)
     map_height = models.PositiveIntegerField(default=100)
     status = models.CharField(max_length=15, choices=MatchStatus.choices, default=MatchStatus.STARTING)
     
     class Meta:
         ordering = ['started_at']
+        
+    @property
+    def winner(self):
+        winner_result = self.results.filter(rank=1, territory_percentage__gt=0.0).first()
+        return winner_result.user if winner_result else None
     
     @property
     def map_size(self):

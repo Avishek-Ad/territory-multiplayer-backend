@@ -170,8 +170,16 @@ class GameConsumer(AsyncWebsocketConsumer):
             )
             # start the game loop
             self.loop_task = asyncio.create_task(self.start_game_loop())
+        
         elif data['type'] == "CHANGE_DIRECTION":
-            pass
+            if data['direction'] == "UP":
+                rooms[self.room_code]["players"][f'user-{self.user.id}']['direction'] = Direction.UP
+            elif data['direction'] == "DOWN":
+                rooms[self.room_code]["players"][f'user-{self.user.id}']['direction'] = Direction.DOWN
+            elif data['direction'] == "LEFT":
+                rooms[self.room_code]["players"][f'user-{self.user.id}']['direction'] = Direction.LEFT
+            elif data['direction'] == "RIGHT":
+                rooms[self.room_code]["players"][f'user-{self.user.id}']['direction'] = Direction.RIGHT
         
         """
         sending types
@@ -317,7 +325,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                     )
                     # if only one player alive send a game finished broadcast and stop the game loop
                     if gm_h.alive_player_count(rooms[self.room_code]['players'].values()) <= 1:
-                        # TODO stop the game loop and finish the match and save match records and declare winner as none
+                        # stop the game loop and finish the match and save match records and declare winner as none
                         await self.stop_gameloop_and_send_game_finish_broadcast() # winner will be calculated inside
                         # pass
                     # elif gm_h.alive_player_count(rooms[self.room_code]['players'].values()) == 1:
@@ -344,15 +352,15 @@ class GameConsumer(AsyncWebsocketConsumer):
         if hasattr(self, 'loop_task'):
             self.loop_task.cancel()
             
-        # TODO update the database and calculate the winner -> save match records and finish the match
-        winner = None
+        # update the database and calculate the winner -> save match records and finish the match
+        winner = gm_h.finish_match_and_save_match_records_and_return_winner(self.room_code, rooms[self.room_code])
                     
         await self.channel_layer.group_send(
-            self.game_room_name, 
+            self.game_room_name,
             {
                 'type': "game.finish.broadcast",
                 'room_code': self.room_code,
-                'winner': winner
+                'winner': getattr(winner, "name", "")
             }
         )
         

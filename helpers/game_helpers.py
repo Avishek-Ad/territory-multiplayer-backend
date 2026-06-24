@@ -31,22 +31,49 @@ def create_match_record(room, width, height):
     )
     
 @database_sync_to_async
-def finish_match_and_save_match_records(room_code, room):
+def finish_match_and_save_match_records_and_return_winner(room_code, room):
     ranks = calculate_rank_and_territory_percentage(room['territory_grid'])
+    
     room_obj = Room.objects.get(room_code=room_code)
     match = room_obj.matches.first()
     match.status = MatchStatus.FINISHED
-    for id, player in room["players"].items():
-        user_id = int(id.split('-')[1])
-        user = User.objects.get(id=user_id)
-        MatchResult.object.create(
-            match=match,
-            user=user,
-            kills=player['kills'],
-            deaths=player['deaths'],
-            territory_percentage=ranks.get(user_id, [0, 0])[1],
-            rank=ranks.get(user_id, [0,0])[0]
+    match.save()
+    
+    player_data_map = {}
+    for player_key, player in room['players'].items():
+        user_id = int(player_key.split('-')[1])
+        player_data_map[user_id] = player
+    
+    # batch user fetch O(1) db hit
+    users = User.objects.in_bulk(player_data_map.keys())
+    
+    # prepare match result in memory
+    match_records_to_create = []
+    for user_id, player in player_data_map.items():
+        user = users.get(user_id)
+        if not user:
+            continue
+        rank_info = ranks.get(user_id, [0, 0.0])
+        match_records_to_create.append(
+            MatchResult(
+                match=match,
+                user=user,
+                kills=player['kills'],
+                deaths=player['deaths'],
+                territory_percentage=rank_info[1],
+                rank=rank_info[0]
+            )
         )
+    
+    # Insert all records atomically in a single multi-row SQL operation
+    if match_records_to_create:
+        MatchResult.objects.bulk_create(match_records_to_create)
+    
+    # clear cached relationships to ensure the newly inserted data is read
+    if hasattr(match, '_prefetched_objects_cache'):
+        match._prefetched_objects_cache.clear()
+    
+    return match.winner
         
 def calculate_rank_and_territory_percentage(territory_grid):
     ranks = {}
