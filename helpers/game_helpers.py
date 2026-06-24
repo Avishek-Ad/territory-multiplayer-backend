@@ -32,12 +32,40 @@ def create_match_record(room, width, height):
     
 @database_sync_to_async
 def finish_match_and_save_match_records(room_code, room):
+    ranks = calculate_rank_and_territory_percentage(room['territory_grid'])
     room_obj = Room.objects.get(room_code=room_code)
     match = room_obj.matches.first()
     match.status = MatchStatus.FINISHED
-    for player in room["players"].values():
-        pass
+    for id, player in room["players"].items():
+        user_id = int(id.split('-')[1])
+        user = User.objects.get(id=user_id)
+        MatchResult.object.create(
+            match=match,
+            user=user,
+            kills=player['kills'],
+            deaths=player['deaths'],
+            territory_percentage=ranks.get(user_id, [0, 0])[1],
+            rank=ranks.get(user_id, [0,0])[0]
+        )
+        
+def calculate_rank_and_territory_percentage(territory_grid):
+    ranks = {}
+    total_area = len(territory_grid) * len(territory_grid[0])
+    for row in territory_grid:
+        for col in row:
+            if col == 0:
+                continue
+            ranks[col] = ranks.get(col, 0) + 1
     
+    sorted_keys = sorted(ranks, key=ranks.get, reverse=True)
+    
+    ranks_lookup = {id_: rank for rank, id_ in enumerate(sorted_keys, start=1)}
+    
+    for id_, area in ranks.items():
+        ranks[id_] = [ranks_lookup[id_], area/total_area]
+    
+    return ranks
+        
 def alive_player_count(players: list) -> int:
     alive = 0
     for player in players:

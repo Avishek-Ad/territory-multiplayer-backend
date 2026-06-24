@@ -82,7 +82,7 @@ class MatchResult(models.Model):
     kills = models.PositiveIntegerField(default=0)
     deaths = models.PositiveIntegerField(default=0)
     territory_percentage = models.DecimalField(max_digits=4, decimal_places=2)
-    rank = models.PositiveIntegerField(default=1)
+    rank = models.PositiveIntegerField(default=0)
     
     class Meta:
         constraints = [
