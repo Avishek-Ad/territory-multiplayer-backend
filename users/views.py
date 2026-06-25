@@ -1,13 +1,21 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
+from rest_framework import permissions
 from django.contrib.auth import authenticate
 from rest_framework.permissions import AllowAny
 from .services import TokenService
 from django.contrib.auth import get_user_model
-from users.serializers import UserRegisterSerializer
+from users.serializers import UserRegisterSerializer, UserInfoSerializer
 
 User = get_user_model()
+
+class RetriveUserInfoView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        serializer = UserInfoSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
