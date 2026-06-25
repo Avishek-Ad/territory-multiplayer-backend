@@ -15,4 +15,5 @@ class RoomMemberInline(admin.TabularInline):
 @admin.register(Room)
 class RoomAdmin(admin.ModelAdmin):
     list_display = ["room_code"]
+    readonly_fields = ["room_code"]
     inlines = [RoomMemberInline]

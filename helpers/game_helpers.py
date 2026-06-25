@@ -8,7 +8,7 @@ User = get_user_model()
 
 @database_sync_to_async
 def get_player_name_by_id(player_id):
-    return User.objects.get(id=player_id).name or ""
+    return User.objects.get(id=player_id).name
 
 @database_sync_to_async
 def is_user_host(room, user):
@@ -36,6 +36,11 @@ def create_match_record(room, width, height):
         map_width=width,
         map_height=height
     )
+    
+@database_sync_to_async
+def get_user_info_from_list_of_user_id(player_ids):
+    users_dict = User.objects.in_bulk(player_ids)
+    return [{"id":uid, "name": user.name} for uid, user in users_dict.items()]
     
 @database_sync_to_async
 def finish_match_and_save_match_records_and_return_winner(room_code, room):
@@ -130,13 +135,13 @@ def are_all_players_in_room_ready(players:dict):
 
 def get_player_previous_coordinate(x, y, dir, speed):
     if dir == Direction.UP:
-        y -= speed
+        y += speed
     elif dir == Direction.DOWN:
-        y += speed        
+        y -= speed        
     elif dir == Direction.LEFT:
-        x -= speed        
+        x += speed        
     elif dir == Direction.RIGHT:
-        x += speed
+        x -= speed
     return x, y
 
 def flood_filed_territory_capture(territory_grid, player_id, trails):

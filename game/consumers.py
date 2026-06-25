@@ -26,12 +26,15 @@ class GameConsumer(AsyncWebsocketConsumer):
         self.context = {}
         self.user = self.scope['user']
         self.room_code = self.scope["url_route"]["kwargs"]["room_code"]
-        if self.user is AnonymousUser() or self.room_code is None:
+        if not self.user.is_authenticated or self.room_code is None:
             await self.close()
+            return
         try:
-            self.room = database_sync_to_async(Room.objects.get)(room_code=self.room_code)
+            get_db_sync = database_sync_to_async(Room.objects.get)
+            self.room = await get_db_sync(room_code=self.room_code)
         except Room.DoesNotExist:
             await self.close()
+            return
         self.game_room_name = f"game_{self.room_code}"
         
         await self.channel_layer.group_add(
@@ -39,7 +42,9 @@ class GameConsumer(AsyncWebsocketConsumer):
         )
         await self.accept()
         
-        if gm_h.is_user_host(self.room, self.user) and not rooms[self.room_code]:
+        is_host = await gm_h.is_user_host(self.room, self.user)
+        print(is_host, self.room_code not in rooms)
+        if is_host and self.room_code not in rooms:
             player = gm_h.get_initial_player_dict(name=self.user.name, width=room_width, height=room_height)
             # create the room object
             room = {
@@ -49,11 +54,18 @@ class GameConsumer(AsyncWebsocketConsumer):
                 "trails": {
                     f'user-{self.user.id}': [(player["x"], player['y'])]
                 },
-                'territory_grid': [0 for _ in room_height for _ in room_width],
+                'territory_grid': [0 for _ in range(room_height) for _ in range(room_width)],
                 'timer': 5*60
             }
             
             rooms[self.room_code] = room
+            # TODO when somebody joins the room or leaves broadcast player info
+            player_ids = [int(x.split('-')[1]) for x in rooms[self.room_code]['players'].keys()]
+            users_info = await gm_h.get_user_info_from_list_of_user_id(player_ids)
+            await self.send(text_data=json.dumps({
+                "type": "PLAYERS",
+                "players": users_info
+            }))
         
         await self.channel_layer.group_send(
             self.game_room_name,
@@ -77,10 +89,10 @@ class GameConsumer(AsyncWebsocketConsumer):
         )
     
     async def receive(self, text_data):        
-        data = json.load(text_data)
+        data = json.loads(text_data)
         
         if data['type'] == "JOIN_ROOM":
-            room_member = gm_h.create_room_member(self.room, self.user)
+            room_member = await gm_h.create_room_member(self.room, self.user)
             self.context['membership'] = room_member
             player = gm_h.get_initial_player_dict(name=self.user.name, width=room_width, height=room_height)
             rooms[self.room_code]["players"][f'user-{self.user.id}'] = player
@@ -92,9 +104,20 @@ class GameConsumer(AsyncWebsocketConsumer):
                     "message": f"{self.user.name} has Joined the room!"
                 }
             )
+            # TODO when somebody joins the room or leaves broadcast player info
+            player_ids = [int(x.split('-')[1]) for x in rooms[self.room_code]['players'].keys()]
+            users_info = await gm_h.get_user_info_from_list_of_user_id(player_ids)
+            await self.channel_layer.group_send(
+            self.game_room_name,
+            {
+                "type": 'player.list.broadcast',
+                "players": users_info
+            }
+        )
         
         elif data['type'] == "LEAVE_ROOM":
-            if not gm_h.is_user_in_room(self.room, self.user):
+            
+            if not await gm_h.is_user_in_room(self.room, self.user):
                 await self.send(
                     text_data=json.dumps(
                         {
@@ -104,12 +127,22 @@ class GameConsumer(AsyncWebsocketConsumer):
                     )
                 )
             rooms[self.room_code]["players"][f'user-{self.user.id}']['alive'] = False
-            gm_h.remove_user_from_room(self.room, self.user)
+            await gm_h.remove_user_from_room(self.room, self.user)
             await self.channel_layer.group_send(
                 self.game_room_name,
                 {
                     "type": 'status.message',
                     "message": f"{self.user.name} has left the room!"
+                }
+            )
+            # TODO when somebody joins the room or leaves broadcast player info
+            player_ids = [int(x.split('-')[1]) for x in rooms[self.room_code]['players'].keys()]
+            users_info = await gm_h.get_user_info_from_list_of_user_id(player_ids)
+            await self.channel_layer.group_send(
+                self.game_room_name,
+                {
+                    "type": 'player.list.broadcast',
+                    "players": users_info
                 }
             )
         
@@ -125,7 +158,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             
         elif data['type'] == "START_GAME":
             # only by host
-            if not gm_h.is_user_host(self.room, self.user):
+            if not await gm_h.is_user_host(self.room, self.user):
                 await self.send(
                     text_data=json.dumps(
                         {
@@ -156,7 +189,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                     )
                 )
             # create the match record in the database
-            gm_h.create_match_record(self.room, room_width, room_height)
+            await gm_h.create_match_record(self.room, room_width, room_height)
             # send a game start broadcast
             await self.channel_layer.group_send(
                 self.game_room_name, 
@@ -196,7 +229,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             "type": "GAME_STARTED",
             "room": rooms[room_code]
         }))
-        
+            
     async def game_finish_broadcast(self, event):
         winner = event['winner']
         await self.send(text_data=json.dumps({
@@ -221,6 +254,12 @@ class GameConsumer(AsyncWebsocketConsumer):
             "killed_player": f'user-{killed_player_id}'
         }))
     
+    async def player_list_broadcast(self, event):
+        players = event['players']
+        await self.send(text_data=json.dumps({
+            "type": "PLAYERS",
+            "players": players
+        }))
     
     async def start_game_loop(self):
         try:                    
@@ -235,7 +274,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                 await self.channel_layer.group_send(
                     self.game_room_name, 
                     {
-                        'type': "game.start.broadcast",
+                        'type': "game.state.broadcast",
                         'room_code': self.room_code
                     }
                 )
@@ -292,7 +331,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                     trails = rooms[self.room_code]['trails'][id]
                     gm_h.flood_filed_territory_capture(rooms[self.room_code]['territory_grid'], user_id, trails)
                     # clearing the trails
-                    rooms[self.room_code]['trails'][id] = 0
+                    rooms[self.room_code]['trails'][id] = []
                     
     
     async def check_collision(self):
@@ -307,10 +346,10 @@ class GameConsumer(AsyncWebsocketConsumer):
                     rooms[self.room_code]['players'][id_tp]['deaths'] += 1
                     rooms[self.room_code]['players'][id_p]['kills'] += 1
                     # send a player has died broadcast -> after this self will show Responing in few second
-                    player_killed = gm_h.get_player_name_by_id(int(id_tp.split('-')[1]))
-                    player_by = gm_h.get_player_name_by_id(int(id_p.split('-')[1]))
+                    player_killed = await gm_h.get_player_name_by_id(int(id_tp.split('-')[1]))
+                    player_by = await gm_h.get_player_name_by_id(int(id_p.split('-')[1]))
                     # will respone the player after few second in random position
-                    asyncio.create_task(self.handle_respwan(dely_seconds=3), player_id=player_killed)
+                    asyncio.create_task(self.handle_respwan(dely_seconds=3, player_id=player_killed))
                     await self.channel_layer.group_send(
                         self.game_room_name, 
                         {
@@ -350,7 +389,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             self.loop_task.cancel()
             
         # update the database and calculate the winner -> save match records and finish the match
-        winner = gm_h.finish_match_and_save_match_records_and_return_winner(self.room_code, rooms[self.room_code])
+        winner = await gm_h.finish_match_and_save_match_records_and_return_winner(self.room_code, rooms[self.room_code])
                     
         await self.channel_layer.group_send(
             self.game_room_name,
@@ -377,7 +416,7 @@ class GameConsumer(AsyncWebsocketConsumer):
         for row in range(len(rooms[self.room_code]['territory_grid'])):
             for col in range(len(rooms[self.room_code]['territory_grid'][0])):
                 if rooms[self.room_code]['territory_grid'][row][col] == player_id:
-                    rooms[self.room_code]['territory_grid'][row][col] == 0
+                    rooms[self.room_code]['territory_grid'][row][col] = 0
         
         # wait for few seconds
         await asyncio.sleep(delay_seconds)

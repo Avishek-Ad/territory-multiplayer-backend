@@ -19,6 +19,7 @@ class RetriveUserInfoView(APIView):
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     
     def post(self, request):
         serializer = UserRegisterSerializer(data=request.data)
@@ -31,6 +32,7 @@ class RegisterView(APIView):
 
 class TokenObtainView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     
     def post(self, request):
         email = request.data.get('email')
@@ -52,6 +54,7 @@ class TokenObtainView(APIView):
 
 class TokenRefreshView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     
     def post(self, request):
         refresh_token = request.data.get('refresh')
