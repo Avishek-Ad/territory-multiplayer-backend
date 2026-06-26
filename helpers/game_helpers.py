@@ -3,6 +3,7 @@ from channels.db import database_sync_to_async
 from game.models import RoomMember, Match, MatchResult, Room, MatchStatus
 from game.room_objects import Direction
 from django.contrib.auth import get_user_model
+from django.conf import settings
 
 User = get_user_model()
 
@@ -40,7 +41,8 @@ def create_match_record(room, width, height):
 @database_sync_to_async
 def get_user_info_from_list_of_user_id(player_ids):
     users_dict = User.objects.in_bulk(player_ids)
-    return [{"id":uid, "name": user.name} for uid, user in users_dict.items()]
+    base_url = settings.BACKEND_BASE_URL
+    return [{"id":uid, "name": user.name, "avatar": f"{base_url}{user.userprofile.avatar.url}" if hasattr(User, "userprofile") else ""} for uid, user in users_dict.items()]
     
 @database_sync_to_async
 def finish_match_and_save_match_records_and_return_winner(room_code, room):
