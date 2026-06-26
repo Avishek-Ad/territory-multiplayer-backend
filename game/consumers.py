@@ -67,6 +67,12 @@ class GameConsumer(AsyncWebsocketConsumer):
                 "players": users_info
             }))
         
+        # if user not in room players send show_join message
+        if f"user-{self.user.id}" not in rooms[self.room_code]['players']:
+            await self.send(text_data=json.dumps({
+                "type": "SHOW_JOIN",
+            }))
+        
         await self.channel_layer.group_send(
             self.game_room_name,
             {
@@ -96,7 +102,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             self.context['membership'] = room_member
             player = gm_h.get_initial_player_dict(name=self.user.name, width=room_width, height=room_height)
             rooms[self.room_code]["players"][f'user-{self.user.id}'] = player
-            rooms[self.room_code]["trails"][f'user-{self.user.id}'].append((player['x'], player['y']))
+            rooms[self.room_code]["trails"][f'user-{self.user.id}'] = [(player['x'], player['y'])]
             await self.channel_layer.group_send(
                 self.game_room_name,
                 {
@@ -104,6 +110,9 @@ class GameConsumer(AsyncWebsocketConsumer):
                     "message": f"{self.user.name} has Joined the room!"
                 }
             )
+            await self.send(text_data=json.dumps({
+                "type": "JOIN_SUCCESS",
+            }))
             # TODO when somebody joins the room or leaves broadcast player info
             player_ids = [int(x.split('-')[1]) for x in rooms[self.room_code]['players'].keys()]
             users_info = await gm_h.get_user_info_from_list_of_user_id(player_ids)
@@ -211,6 +220,8 @@ class GameConsumer(AsyncWebsocketConsumer):
             elif data['direction'] == "RIGHT":
                 rooms[self.room_code]["players"][f'user-{self.user.id}']['direction'] = Direction.RIGHT
         
+        elif data['type'] == "PRINT":
+            print(data)
         """
         sending types
         GAME_STATE

@@ -40,9 +40,20 @@ def create_match_record(room, width, height):
     
 @database_sync_to_async
 def get_user_info_from_list_of_user_id(player_ids):
-    users_dict = User.objects.in_bulk(player_ids)
-    base_url = settings.BACKEND_BASE_URL
-    return [{"id":uid, "name": user.name, "avatar": f"{base_url}{user.userprofile.avatar.url}" if hasattr(User, "userprofile") else ""} for uid, user in users_dict.items()]
+    users_dict = User.objects.filter(id__in=player_ids).select_related('userprofile')
+    base_url = settings.BACKEND_BASE_URL.rstrip('/')
+    # return [{"id":uid, "name": user.name, "avatar": f"{base_url}{user.userprofile.avatar.url}" if hasattr(User, "userprofile") else ""} for uid, user in users_dict.items()]
+    results = []
+    for user in users_dict:
+        avatar_url = ""
+        if hasattr(user, 'userprofile') and user.userprofile.avatar:
+            avatar_url = f"{base_url}{user.userprofile.avatar.url}"
+        
+        results.append({
+            "id": user.id,
+            "name": user.name,
+            "avatar": avatar_url
+        })
     
 @database_sync_to_async
 def finish_match_and_save_match_records_and_return_winner(room_code, room):
