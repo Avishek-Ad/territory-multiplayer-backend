@@ -43,6 +43,11 @@ class GameConsumer(AsyncWebsocketConsumer):
         await self.accept()
         
         is_host = await gm_h.is_user_host(self.room, self.user)
+        # if host show the connected message
+        if is_host:
+            await self.send(text_data=json.dumps({
+                "type": "JOIN_SUCCESS",
+            }))
         print(is_host, self.room_code not in rooms)
         if is_host and self.room_code not in rooms:
             player = gm_h.get_initial_player_dict(name=self.user.name, width=room_width, height=room_height)
@@ -71,6 +76,16 @@ class GameConsumer(AsyncWebsocketConsumer):
         if f"user-{self.user.id}" not in rooms[self.room_code]['players']:
             await self.send(text_data=json.dumps({
                 "type": "SHOW_JOIN",
+            }))
+        else:
+            await self.send(text_data=json.dumps({
+                "type": "JOIN_SUCCESS",
+            }))
+            player_ids = [int(x.split('-')[1]) for x in rooms[self.room_code]['players'].keys()]
+            users_info = await gm_h.get_user_info_from_list_of_user_id(player_ids)
+            await self.send(text_data=json.dumps({
+                "type": "PLAYERS",
+                "players": users_info
             }))
         
         await self.channel_layer.group_send(
@@ -135,8 +150,17 @@ class GameConsumer(AsyncWebsocketConsumer):
                         }
                     )
                 )
-            rooms[self.room_code]["players"][f'user-{self.user.id}']['alive'] = False
+            rooms[self.room_code]["players"].pop(f'user-{self.user.id}')
             await gm_h.remove_user_from_room(self.room, self.user)
+            # send room left successfully
+            await self.send(
+                text_data=json.dumps(
+                    {
+                        "type": "ROOM_LEAVE_SUCCESS", 
+                        'message': "You are not in the room"
+                    }
+                )
+            )
             await self.channel_layer.group_send(
                 self.game_room_name,
                 {

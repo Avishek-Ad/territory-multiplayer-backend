@@ -54,3 +54,11 @@ class RoomLeaveAPIView(APIView):
         else:
             room_member.delete()
         return Response({"message":"Room Leave Successful"}, status=status.HTTP_200_OK)
+    
+class IsUserHost(APIView):
+    def get(self, request, room_code):
+        room = get_object_or_404(Room, room_code=room_code)
+        rooms_member = room.members.filter(user=request.user).first()
+        if not rooms_member:
+            return Response({"message": "you are not a member of this room"}, status=status.HTTP_403_FORBIDDEN)
+        return Response(rooms_member.is_host, status=status.HTTP_200_OK)

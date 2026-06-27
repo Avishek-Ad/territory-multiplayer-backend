@@ -54,6 +54,7 @@ def get_user_info_from_list_of_user_id(player_ids):
             "name": user.name,
             "avatar": avatar_url
         })
+    return results
     
 @database_sync_to_async
 def finish_match_and_save_match_records_and_return_winner(room_code, room):
