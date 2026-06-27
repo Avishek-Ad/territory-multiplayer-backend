@@ -119,12 +119,8 @@ def calculate_rank_and_territory_percentage(territory_grid):
     
     return ranks
         
-def alive_player_count(players: list) -> int:
-    alive = 0
-    for player in players:
-        if player['alive']:
-            alive += 1
-    return alive
+def player_count(players: list) -> int:
+    return len(players)
     
 def get_initial_player_dict(name, width, height):
     return {

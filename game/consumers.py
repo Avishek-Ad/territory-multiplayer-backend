@@ -60,7 +60,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                     f'user-{self.user.id}': [(player["x"], player['y'])]
                 },
                 'territory_grid': [[0 for _ in range(room_height)] for _ in range(room_width)],
-                'timer': 5*60
+                'timer': 0.25*60
             }
             
             rooms[self.room_code] = room
@@ -306,6 +306,15 @@ class GameConsumer(AsyncWebsocketConsumer):
             "players": players
         }))
     
+    async def player_will_respwan_broadcast(self, event):
+        player_id = event['player_id']
+        delay_seconds = event['delay_seconds']
+        await self.send(text_data=json.dumps({
+            "type": "WILL_RESPAWN",
+            "message": f'Respawn in {delay_seconds}seconds',
+            "player_id": player_id
+        }))
+    
     async def start_game_loop(self):
         try:                    
             while rooms[self.room_code]['timer'] > 0:
@@ -410,7 +419,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                         }
                     )
                     # if only one player alive send a game finished broadcast and stop the game loop
-                    if gm_h.alive_player_count(rooms[self.room_code]['players'].values()) <= 1:
+                    if gm_h.player_count(rooms[self.room_code]['players'].values()) <= 1:
                         # stop the game loop and finish the match and save match records and declare winner as none
                         await self.stop_gameloop_and_send_game_finish_broadcast() # winner will be calculated inside
                         # pass
@@ -444,10 +453,12 @@ class GameConsumer(AsyncWebsocketConsumer):
     async def stop_gameloop_and_send_game_finish_broadcast(self):
         if hasattr(self, 'loop_task'):
             self.loop_task.cancel()
+        print("GAME_FINISH")
             
         # update the database and calculate the winner -> save match records and finish the match
         winner = await gm_h.finish_match_and_save_match_records_and_return_winner(self.room_code, rooms[self.room_code])
-                    
+        
+        print("WINNER", winner)
         await self.channel_layer.group_send(
             self.game_room_name,
             {
@@ -459,15 +470,19 @@ class GameConsumer(AsyncWebsocketConsumer):
         
     async def handle_respwan(self, delay_seconds: int, player_key:str):
         # send a self.send with will respone in delay_seconds
-        await self.send(text_data=json.dumps({
-            "type": "WILL_RESPAWN",
-            "message": f'Respawn in {delay_seconds}',
-        }))
+        print("IN HANDLE RESPWAN")
+        player_id = int(player_key.split('-')[1])
+        await self.channel_layer.group_send(
+            self.game_room_name,
+            {
+                'type': "player.will.respwan.broadcast",
+                "delay_seconds": delay_seconds,
+                "player_id": player_id
+            }
+        )
         
         # randomize the position and reset the trails and territory
         new_x, new_y = gm_h.get_random_coordinate(room_width, room_height)
-        
-        player_id = int(player_key.split('-')[1])
         
         rooms[self.room_code]['players'][player_key]['x'] = new_x
         rooms[self.room_code]['players'][player_key]['y'] = new_y

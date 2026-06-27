@@ -1,8 +1,8 @@
 from django.contrib import admin
 from .models import Room, RoomMember, Match, MatchResult
 
-# admin.site.register(Room)
-# admin.site.register(RoomMember)
+admin.site.register(Match)
+admin.site.register(MatchResult)
 
 class RoomMemberInline(admin.TabularInline):
     model = RoomMember
