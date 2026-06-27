@@ -131,7 +131,7 @@ def get_initial_player_dict(name, width, height):
         'name': name,
         'x': random.randint(0, width),
         'y': random.randint(0, height),
-        'direction': random.choice(list(Direction)),
+        'direction': random.choice(list(Direction)).value,
         'alive': True,
         'ready': True,
         'kills': 0,
@@ -148,13 +148,13 @@ def are_all_players_in_room_ready(players:dict):
     return True
 
 def get_player_previous_coordinate(x, y, dir, speed):
-    if dir == Direction.UP:
+    if dir == Direction.UP.value:
         y += speed
-    elif dir == Direction.DOWN:
+    elif dir == Direction.DOWN.value:
         y -= speed        
-    elif dir == Direction.LEFT:
+    elif dir == Direction.LEFT.value:
         x += speed        
-    elif dir == Direction.RIGHT:
+    elif dir == Direction.RIGHT.value:
         x -= speed
     return x, y
 
