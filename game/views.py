@@ -61,7 +61,7 @@ class IsUserHost(APIView):
         rooms_member = room.members.filter(user=request.user).first()
         if not rooms_member:
             return Response({"message": "you are not a member of this room"}, status=status.HTTP_403_FORBIDDEN)
-        return Response(rooms_member.is_host, status=status.HTTP_200_OK)
+        return Response({"is_host": rooms_member.is_host}, status=status.HTTP_200_OK)
     
 class GetMatchStats(APIView):
     def get(self, request, room_code, match_id):
