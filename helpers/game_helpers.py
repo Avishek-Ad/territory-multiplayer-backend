@@ -4,6 +4,7 @@ from game.models import RoomMember, Match, MatchResult, Room, MatchStatus
 from game.room_objects import Direction
 from django.contrib.auth import get_user_model
 from django.conf import settings
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -58,11 +59,13 @@ def get_user_info_from_list_of_user_id(player_ids):
     
 @database_sync_to_async
 def finish_match_and_save_match_records_and_return_winner(room_code, room):
+    print("inside finish_match_and_save_match_records_and_return_winner")
     ranks = calculate_rank_and_territory_percentage(room['territory_grid'])
-    
+    print(ranks)
     room_obj = Room.objects.get(room_code=room_code)
-    match = room_obj.matches.first()
+    match = room_obj.matches.exclude(status=MatchStatus.FINISHED).first()
     match.status = MatchStatus.FINISHED
+    match.ended_at = timezone.now()
     match.save()
     
     player_data_map = {}
@@ -73,13 +76,19 @@ def finish_match_and_save_match_records_and_return_winner(room_code, room):
     # batch user fetch O(1) db hit
     users = User.objects.in_bulk(player_data_map.keys())
     
+    lowest_rank = max(ranks.values(), key=lambda val: val[0])[0]
+    
     # prepare match result in memory
     match_records_to_create = []
     for user_id, player in player_data_map.items():
         user = users.get(user_id)
         if not user:
             continue
-        rank_info = ranks.get(user_id, [0, 0.0])
+        if user_id in ranks:
+            rank_info = ranks.get(user_id)
+        else:
+            lowest_rank += 1
+            rank_info = [lowest_rank, 0.0]
         match_records_to_create.append(
             MatchResult(
                 match=match,
@@ -98,10 +107,11 @@ def finish_match_and_save_match_records_and_return_winner(room_code, room):
     # clear cached relationships to ensure the newly inserted data is read
     if hasattr(match, '_prefetched_objects_cache'):
         match._prefetched_objects_cache.clear()
-    
-    return match.winner
+    print("WINNER", match.winner)
+    return match.id
         
 def calculate_rank_and_territory_percentage(territory_grid):
+    print("RANK CALCULATION")
     ranks = {}
     total_area = len(territory_grid) * len(territory_grid[0])
     for row in territory_grid:
@@ -115,7 +125,7 @@ def calculate_rank_and_territory_percentage(territory_grid):
     ranks_lookup = {id_: rank for rank, id_ in enumerate(sorted_keys, start=1)}
     
     for id_, area in ranks.items():
-        ranks[id_] = [ranks_lookup[id_], area/total_area]
+        ranks[id_] = [ranks_lookup[id_], (area*100)/total_area]
     
     return ranks
         
@@ -125,8 +135,8 @@ def player_count(players: list) -> int:
 def get_initial_player_dict(name, width, height):
     return {
         'name': name,
-        'x': random.randint(0, width),
-        'y': random.randint(0, height),
+        'x': random.randint(0, width-1),
+        'y': random.randint(0, height-1),
         'direction': random.choice(list(Direction)).value,
         'alive': True,
         'ready': True,

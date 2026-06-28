@@ -276,10 +276,12 @@ class GameConsumer(AsyncWebsocketConsumer):
         }))
             
     async def game_finish_broadcast(self, event):
-        winner = event['winner']
+        match_id = event['match_id']
+        room_code = event['room_code']
         await self.send(text_data=json.dumps({
             "type": "GAME_FINISHED",
-            "winner": winner
+            'room_code': room_code,
+            "match_id": match_id
         }))
         
     async def game_state_broadcast(self, event):
@@ -383,6 +385,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                 if (x, y) not in values:
                     rooms[self.room_code]['trails'][id].append((x,y))
                 else:
+                    print(prev_pos, (x, y))
                     if prev_pos != (x,y):
                         # what if current position is already in the trail -> put enclosure in self territory
                         trails = rooms[self.room_code]['trails'][id]
@@ -453,18 +456,24 @@ class GameConsumer(AsyncWebsocketConsumer):
     async def stop_gameloop_and_send_game_finish_broadcast(self):
         if hasattr(self, 'loop_task'):
             self.loop_task.cancel()
+            try:
+                # wait for the loop task to actually finifh canceling
+                await self.loop_task
+            except asyncio.CancelledError:
+                pass
         print("GAME_FINISH")
-            
-        # update the database and calculate the winner -> save match records and finish the match
-        winner = await gm_h.finish_match_and_save_match_records_and_return_winner(self.room_code, rooms[self.room_code])
         
-        print("WINNER", winner)
+        # update the database and calculate the winner -> save match records and finish the match
+        # use shield to prevent this critical database save to be canceled halfway
+        match_id = await asyncio.shield(gm_h.finish_match_and_save_match_records_and_return_winner(self.room_code, rooms[self.room_code]))
+        
+        print("WINNER IS CALCULATED")
         await self.channel_layer.group_send(
             self.game_room_name,
             {
                 'type': "game.finish.broadcast",
                 'room_code': self.room_code,
-                'winner': getattr(winner, "name", "")
+                'match_id': match_id
             }
         )
         

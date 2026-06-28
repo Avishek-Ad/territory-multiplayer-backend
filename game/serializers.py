@@ -1,5 +1,36 @@
 from rest_framework import serializers
-from .models import Room, RoomMember
+from .models import Room, RoomMember, MatchResult
+from django.conf import settings
+
+class MatchResultSerializer(serializers.ModelSerializer):
+    user_id = serializers.SerializerMethodField()
+    name = serializers.SerializerMethodField()
+    avatar = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = MatchResult
+        fields = [
+            'user_id',
+            'name',
+            'avatar',
+            'kills',
+            'deaths',
+            'territory_percentage',
+            'rank'
+        ]
+        
+    def get_user_id(self, obj):
+        return obj.user.id
+    
+    def get_name(self, obj):
+        return obj.user.name
+    
+    def get_avatar(self, obj):
+        avatar_url = ""
+        base_url = settings.BACKEND_BASE_URL.rstrip('/')
+        if hasattr(obj.user, 'userprofile') and obj.user.userprofile.avatar:
+            avatar_url = f"{base_url}{obj.user.userprofile.avatar.url}"
+        return avatar_url
 
 class RoomMemberSerializer(serializers.ModelSerializer):
     class Meta:

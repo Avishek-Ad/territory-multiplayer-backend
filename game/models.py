@@ -79,7 +79,7 @@ class MatchResult(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="matches")
     kills = models.PositiveIntegerField(default=0)
     deaths = models.PositiveIntegerField(default=0)
-    territory_percentage = models.DecimalField(max_digits=4, decimal_places=2)
+    territory_percentage = models.DecimalField(max_digits=6, decimal_places=4)
     rank = models.PositiveIntegerField(default=0)
     
     class Meta:
@@ -89,3 +89,4 @@ class MatchResult(models.Model):
                 name="unique_match_result"
             )
         ]
+        ordering = ['rank', 'kills', 'deaths']
