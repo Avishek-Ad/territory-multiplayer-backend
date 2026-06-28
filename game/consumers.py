@@ -132,15 +132,14 @@ class GameConsumer(AsyncWebsocketConsumer):
             player_ids = [int(x.split('-')[1]) for x in rooms[self.room_code]['players'].keys()]
             users_info = await gm_h.get_user_info_from_list_of_user_id(player_ids)
             await self.channel_layer.group_send(
-            self.game_room_name,
-            {
-                "type": 'player.list.broadcast',
-                "players": users_info
-            }
-        )
+                self.game_room_name,
+                {
+                    "type": 'player.list.broadcast',
+                    "players": users_info
+                }
+            )
         
         elif data['type'] == "LEAVE_ROOM":
-            
             if not await gm_h.is_user_in_room(self.room, self.user):
                 await self.send(
                     text_data=json.dumps(
@@ -196,7 +195,13 @@ class GameConsumer(AsyncWebsocketConsumer):
             rooms[self.room_code]["players"][f'user-{self.user.id}']['ready'] = False
         
         elif data['type'] == "CANCEL_GAME":
-            pass
+            if await gm_h.is_user_host(self.room, self.user):
+                await self.channel_layer.group_send(
+                self.game_room_name,
+                {
+                    "type": 'game.cancel.broadcast',
+                }
+            )
             
         elif data['type'] == "START_GAME":
             # only by host
@@ -256,6 +261,30 @@ class GameConsumer(AsyncWebsocketConsumer):
             elif data['direction'] == "right":
                 rooms[self.room_code]["players"][f'user-{self.user.id}']['direction'] = Direction.RIGHT.value
         
+        elif data['type'] == "RESET_ROOM":
+            is_host = data['is_host']
+            # TODO we donot need to send if is_host we can calculate it in the backend
+            print(data)
+            if is_host:
+                room = rooms[self.room_code]
+                room['timer'] = 0.25*60
+                room['territory_grid'] = [[0 for _ in range(room_height)] for _ in range(room_width)]
+                for pid in list(room['players'].keys()):
+                    current_player_name = room['players'][pid]['name']
+                    new_player_data = gm_h.get_initial_player_dict(name=current_player_name, width=room_width, height=room_height)
+                    room['players'][pid] = new_player_data
+                    room['trails'][pid] = [(new_player_data['x'], new_player_data['y'])]
+                    
+            player_ids = [int(x.split('-')[1]) for x in rooms[self.room_code]['players'].keys()]
+            users_info = await gm_h.get_user_info_from_list_of_user_id(player_ids)
+            await self.channel_layer.group_send(
+                self.game_room_name,
+                {
+                    "type": 'player.list.broadcast',
+                    "players": users_info
+                }
+            )
+        
         elif data['type'] == "PRINT":
             print(data)
         """
@@ -273,6 +302,11 @@ class GameConsumer(AsyncWebsocketConsumer):
     async def game_start_broadcast(self, event):
         await self.send(text_data=json.dumps({
             "type": "GAME_STARTED",
+        }))
+    
+    async def game_cancel_broadcast(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "GAME_CANCELLED",
         }))
             
     async def game_finish_broadcast(self, event):

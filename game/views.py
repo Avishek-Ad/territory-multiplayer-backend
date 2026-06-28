@@ -2,10 +2,9 @@ from rest_framework import generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .serializers import RoomSerializer, RoomMemberSerializer, RoomUpdateSerializer, MatchResultSerializer
-from .models import Room, RoomMember, MatchStatus, MatchResult
+from .models import Room, RoomMember, MatchStatus
 from django.shortcuts import get_object_or_404
 from rest_framework import status
-from django.db.models import Case, When, Value, IntegerField
 
 class RoomListCreateAPIView(generics.ListCreateAPIView):
     queryset = Room.objects.all()
@@ -70,13 +69,6 @@ class GetMatchStats(APIView):
         match = room.matches.filter(id=match_id, status=MatchStatus.FINISHED).first()
         if not match:
             return Response({"message": "Match Not Found"}, status=status.HTTP_404_NOT_FOUND)
-        # results = MatchResult.objects.filter(match=match).annotate(
-        #     rank_sort_order=Case(
-        #         When(rank=0, then=Value(1)),  # If rank is 0, give it a high group value (1)
-        #         default=Value(0),             # Otherwise, give it a low group value (0)
-        #         output_field=IntegerField(),
-        #         )
-        #     ).order_by('rank_sort_order', 'rank')
         serializer = MatchResultSerializer(match.results, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
         
