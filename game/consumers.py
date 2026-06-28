@@ -1,22 +1,17 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from django.contrib.auth.models import AnonymousUser
 from .models import Room
 import json
 from .room_objects import Direction
 import asyncio
 import helpers.game_helpers as gm_h
 
-# : add indication for online users
-# currently only for authenticated users
-# : make a play anomonoyusly system as well
-# : also make no room_code one for local users
-
 rooms = {}
 room_width = 20
 room_height = 20
 minimum_players_required = 2
 speed = 1
+timer_multiplier = 1
 
 
 
@@ -60,7 +55,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                     f'user-{self.user.id}': [(player["x"], player['y'])]
                 },
                 'territory_grid': [[0 for _ in range(room_height)] for _ in range(room_width)],
-                'timer': 0.25*60
+                'timer': timer_multiplier*60
             }
             
             rooms[self.room_code] = room
@@ -267,7 +262,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             print(data)
             if is_host:
                 room = rooms[self.room_code]
-                room['timer'] = 0.25*60
+                room['timer'] = timer_multiplier*60
                 room['territory_grid'] = [[0 for _ in range(room_height)] for _ in range(room_width)]
                 for pid in list(room['players'].keys()):
                     current_player_name = room['players'][pid]['name']

@@ -33,7 +33,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
 ]
 
-BACKEND_BASE_URL = "http:localhost:8000"
+BACKEND_BASE_URL = "http://localhost:8000"
 
 # Application definition
 

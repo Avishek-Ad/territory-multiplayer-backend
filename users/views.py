@@ -10,6 +10,9 @@ from users.serializers import UserRegisterSerializer, UserInfoSerializer
 
 User = get_user_model()
 
+class RetriveUserStatsView(APIView):
+    pass
+
 class RetriveUserInfoView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     def get(self, request):

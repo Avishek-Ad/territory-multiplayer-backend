@@ -2,6 +2,26 @@ from rest_framework import serializers
 from .models import Room, RoomMember, MatchResult
 from django.conf import settings
 
+class MatchRecordInlineSerializer(serializers.ModelSerializer):
+    room_code = serializers.SerializerMethodField()
+    played_at = serializers.SerializerMethodField()
+    class Meta:
+        model = MatchResult
+        fields = [
+            'id',
+            'room_code',
+            'rank',
+            'kills',
+            'deaths',
+            'territory_percentage',
+            'played_at',
+        ]
+    def get_room_code(self, obj):
+        return obj.match.room.room_code
+    
+    def get_played_at(self, obj):
+        return obj.match.started_at
+
 class MatchResultSerializer(serializers.ModelSerializer):
     user_id = serializers.SerializerMethodField()
     name = serializers.SerializerMethodField()
