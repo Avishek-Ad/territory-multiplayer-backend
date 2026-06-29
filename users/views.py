@@ -6,12 +6,50 @@ from django.contrib.auth import authenticate
 from rest_framework.permissions import AllowAny
 from .services import TokenService
 from django.contrib.auth import get_user_model
-from users.serializers import UserRegisterSerializer, UserInfoSerializer
+from users.serializers import (
+    UserRegisterSerializer, 
+    UserInfoSerializer, 
+    UserStatsSerializer, 
+    ProfileImageSerializer,
+    UserNameChangeSerializer
+    )
+from django.db.models import Sum, Count, Avg, Q
+from rest_framework.parsers import MultiPartParser, FormParser
 
 User = get_user_model()
 
+class ChangeUsernameView(APIView):
+    def post(self, request):
+        serializer = UserNameChangeSerializer(instance=request.user, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message":"success"},status=status.HTTP_200_OK)
+        return Response({"message": serializer.errors}, status=status.HTTP_400_OK)
+ 
+class ChangeUserAvatarView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+    def post(self, request):
+        userprofile = request.user.userprofile
+        serializer = ProfileImageSerializer(instance=userprofile, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message":"success"},status=status.HTTP_200_OK)
+        return Response({"message": serializer.errors}, status=status.HTTP_400_OK)
+        
+
 class RetriveUserStatsView(APIView):
-    pass
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        user_qs = User.objects.annotate(
+            total_matches=Count('matches', distinct=True),
+            wins=Count('matches', filter=Q(matches__rank=1)),
+            total_kills=Sum('matches__kills', default=0),
+            total_deaths=Sum('matches__deaths', default=0),
+            avg_territory_percentage=Avg('matches__territory_percentage', default=0.0)
+        ).prefetch_related('matches').get(id=self.request.user.id)
+        serializer = UserStatsSerializer(user_qs)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+        
 
 class RetriveUserInfoView(APIView):
     permission_classes = [permissions.IsAuthenticated]

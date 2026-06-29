@@ -1,18 +1,18 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, UserProfile
 from django.conf import settings
 from game.serializers import MatchRecordInlineSerializer
-from django.db.models import Sum, Count
-
 
 
 class UserStatsSerializer(serializers.Serializer):
-    total_matches = serializers.SerializerMethodField()
-    wins = serializers.SerializerMethodField()
-    total_kills = serializers.SerializerMethodField()
-    total_deaths = serializers.SerializerMethodField()
-    avg_territory_percentage = serializers.SerializerMethodField()
-    # match_history = MatchRecordInlineSerializer(source=)
+    total_matches = serializers.IntegerField(read_only=True)
+    wins = serializers.IntegerField(read_only=True)
+    total_kills = serializers.IntegerField(read_only=True)
+    total_deaths = serializers.IntegerField(read_only=True)
+    avg_territory_percentage = serializers.DecimalField(
+        max_digits=6, decimal_places=4, read_only=True
+    )
+    match_history = MatchRecordInlineSerializer(source='matches', many=True, read_only=True)
 
 class UserInfoSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
@@ -45,3 +45,16 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         return User.objects.create_user(**validated_data)
     
+class UserNameChangeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            'name'
+        ]
+    
+class ProfileImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = [
+            'avatar'
+        ]
