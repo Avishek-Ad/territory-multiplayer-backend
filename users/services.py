@@ -16,7 +16,7 @@ class TokenService:
             access_payload = {
                 'token_type': 'access',
                 'user_id': str(user.id),
-                'exp': now + timedelta(days=1),
+                'exp': now + timedelta(minutes=15),
                 'iat': now,
             }
             

@@ -74,4 +74,4 @@ class RefreshToken(models.Model):
     
    @property
    def has_expired(self):
-       return self.expires_at >= timezone.now()
+       return self.expires_at < timezone.now()

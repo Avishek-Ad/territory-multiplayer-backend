@@ -43,7 +43,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             await self.send(text_data=json.dumps({
                 "type": "JOIN_SUCCESS",
             }))
-        print(is_host, self.room_code not in rooms)
+        # print(is_host, self.room_code not in rooms)
         if is_host and self.room_code not in rooms:
             player = gm_h.get_initial_player_dict(name=self.user.name, width=room_width, height=room_height)
             # create the room object
@@ -59,7 +59,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             }
             
             rooms[self.room_code] = room
-            # TODO when somebody joins the room or leaves broadcast player info
+            # when somebody joins the room or leaves broadcast player info
             player_ids = [int(x.split('-')[1]) for x in rooms[self.room_code]['players'].keys()]
             users_info = await gm_h.get_user_info_from_list_of_user_id(player_ids)
             await self.send(text_data=json.dumps({
@@ -246,7 +246,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             self.loop_task = asyncio.create_task(self.start_game_loop())
         
         elif data['type'] == "CHANGE_DIRECTION":
-            print(data)
+            # print(data)
             if data['direction'] == "up":
                 rooms[self.room_code]["players"][f'user-{self.user.id}']['direction'] = Direction.UP.value
             elif data['direction'] == "down":
@@ -259,7 +259,7 @@ class GameConsumer(AsyncWebsocketConsumer):
         elif data['type'] == "RESET_ROOM":
             is_host = data['is_host']
             # TODO we donot need to send if is_host we can calculate it in the backend
-            print(data)
+            # print(data)
             if is_host:
                 room = rooms[self.room_code]
                 room['timer'] = timer_multiplier*60
@@ -414,7 +414,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                 if (x, y) not in values:
                     rooms[self.room_code]['trails'][id].append((x,y))
                 else:
-                    print(prev_pos, (x, y))
+                    # print(prev_pos, (x, y))
                     if prev_pos != (x,y):
                         # what if current position is already in the trail -> put enclosure in self territory
                         trails = rooms[self.room_code]['trails'][id]
@@ -490,13 +490,13 @@ class GameConsumer(AsyncWebsocketConsumer):
                 await self.loop_task
             except asyncio.CancelledError:
                 pass
-        print("GAME_FINISH")
+        # print("GAME_FINISH")
         
         # update the database and calculate the winner -> save match records and finish the match
         # use shield to prevent this critical database save to be canceled halfway
         match_id = await asyncio.shield(gm_h.finish_match_and_save_match_records_and_return_winner(self.room_code, rooms[self.room_code]))
         
-        print("WINNER IS CALCULATED")
+        # print("WINNER IS CALCULATED")
         await self.channel_layer.group_send(
             self.game_room_name,
             {
@@ -508,7 +508,7 @@ class GameConsumer(AsyncWebsocketConsumer):
         
     async def handle_respwan(self, delay_seconds: int, player_key:str):
         # send a self.send with will respone in delay_seconds
-        print("IN HANDLE RESPWAN")
+        # print("IN HANDLE RESPWAN")
         player_id = int(player_key.split('-')[1])
         await self.channel_layer.group_send(
             self.game_room_name,

@@ -1,7 +1,7 @@
 from django.contrib import admin
-from .models import User, UserProfile
+from .models import User, UserProfile, RefreshToken
 
-# admin.site.register(User)
+admin.site.register(RefreshToken)
 # admin.site.register(UserProfile)
 
 class UserProfileInline(admin.TabularInline):

@@ -59,9 +59,9 @@ def get_user_info_from_list_of_user_id(player_ids):
     
 @database_sync_to_async
 def finish_match_and_save_match_records_and_return_winner(room_code, room):
-    print("inside finish_match_and_save_match_records_and_return_winner")
+    # print("inside finish_match_and_save_match_records_and_return_winner")
     ranks = calculate_rank_and_territory_percentage(room['territory_grid'])
-    print(ranks)
+    # print(ranks)
     room_obj = Room.objects.get(room_code=room_code)
     match = room_obj.matches.exclude(status=MatchStatus.FINISHED).first()
     match.status = MatchStatus.FINISHED
@@ -107,11 +107,11 @@ def finish_match_and_save_match_records_and_return_winner(room_code, room):
     # clear cached relationships to ensure the newly inserted data is read
     if hasattr(match, '_prefetched_objects_cache'):
         match._prefetched_objects_cache.clear()
-    print("WINNER", match.winner)
+    # print("WINNER", match.winner)
     return match.id
         
 def calculate_rank_and_territory_percentage(territory_grid):
-    print("RANK CALCULATION")
+    # print("RANK CALCULATION")
     ranks = {}
     total_area = len(territory_grid) * len(territory_grid[0])
     for row in territory_grid:

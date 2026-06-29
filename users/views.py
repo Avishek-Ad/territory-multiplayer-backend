@@ -16,6 +16,10 @@ from users.serializers import (
 from django.db.models import Sum, Count, Avg, Q
 from rest_framework.parsers import MultiPartParser, FormParser
 
+import os
+from .models import RefreshToken
+from django.conf import settings
+
 User = get_user_model()
 
 class ChangeUsernameView(APIView):
@@ -79,7 +83,6 @@ class TokenObtainView(APIView):
         email = request.data.get('email')
         password = request.data.get('password')
         
-            
         user = authenticate(email=email, password=password)
         if user is not None:
             # remove all previous refresh token for this user
@@ -98,7 +101,7 @@ class TokenRefreshView(APIView):
     authentication_classes = []
     
     def post(self, request):
-        refresh_token = request.data.get('refresh')
+        refresh_token = request.data.get('refresh', None)
         
         if not refresh_token:
             return Response({'detail': 'Refresh token required.'}, status=status.HTTP_400_BAD_REQUEST)
