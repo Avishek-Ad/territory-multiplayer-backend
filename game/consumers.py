@@ -5,6 +5,7 @@ import json
 from .room_objects import Direction
 import asyncio
 import helpers.game_helpers as gm_h
+import math
 
 rooms = {}
 room_width = 20
@@ -12,7 +13,8 @@ room_height = 20
 minimum_players_required = 2
 speed = 1
 timer_multiplier = 1
-
+game_loop_time_reduction = 0.3
+game_loop_run_delay = 0.5
 
 
 class GameConsumer(AsyncWebsocketConsumer):
@@ -347,7 +349,8 @@ class GameConsumer(AsyncWebsocketConsumer):
         }))
     
     async def start_game_loop(self):
-        try:                    
+        try:
+            # timer = math.floor(rooms[self.room_code]['timer'])
             while rooms[self.room_code]['timer'] > 0:
                 # update position
                 await self.update_position()
@@ -364,9 +367,9 @@ class GameConsumer(AsyncWebsocketConsumer):
                     }
                 )
                 # reduce timer
-                rooms[self.room_code]['timer'] -= 1
+                rooms[self.room_code]['timer'] -= game_loop_time_reduction
                 
-                await asyncio.sleep(1) # 300ms -> 1sec = 1000ms
+                await asyncio.sleep(game_loop_run_delay) # 300ms -> 1sec = 1000ms
             else:
                 # if timer is zero send a game finished broadcast and stop game loop
                 await self.stop_gameloop_and_send_game_finish_broadcast()
